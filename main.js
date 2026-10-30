@@ -315,12 +315,12 @@ async function searchSlash(interaction) {
 
   const data = await searchScripts(params);
   if (data.error) {
-    await interaction.followup.send({ content: `❌ Error: ${data.error}` });
+    await interaction.followUp.send({ content: `❌ Error: ${data.error}` });
     return;
   }
 
   const embed = buildResultsEmbed(data, script, params.page);
-  await interaction.followup.send({ embeds: [embed] });
+  await interaction.followUp.send({ embeds: [embed] });
 }
 
 // ---------- Help ----------
