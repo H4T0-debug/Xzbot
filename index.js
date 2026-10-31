@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, REST, Routes, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 const express = require('express');
 
 const client = new Client({
@@ -13,7 +13,7 @@ const client = new Client({
 const PREFIX = ';';
 const API_BASE = 'https://scriptblox.com/api/script/search';
 
-// ============ Keep Render awake ============
+// Keep Render awake
 const app = express();
 app.get('/', (req, res) => res.send('XZ Bot is online'));
 const PORT = process.env.PORT || 3000;
@@ -37,11 +37,9 @@ function parseArgs(text) {
 function buildQueryParams(args) {
   const params = new URLSearchParams();
 
-  // Main search query
   const query = args.script || args.q || args.query || args.name;
   if (query) params.set('q', query);
 
-  // Boolean filters (true/false → 1/0)
   const boolMap = {
     verified: 'verified',
     key: 'key',
@@ -56,26 +54,21 @@ function buildQueryParams(args) {
     }
   }
 
-  // Mode
   if (args.mode) {
     const mode = args.mode.toLowerCase();
     if (mode === 'free' || mode === 'paid') params.set('mode', mode);
   }
 
-  // Pagination & limits
   if (args.page) params.set('page', args.page);
   if (args.max) params.set('max', Math.min(parseInt(args.max) || 10, 20));
 
-  // Sorting
   if (args.sortby || args.sort) params.set('sortBy', (args.sortby || args.sort).toLowerCase());
   if (args.order) params.set('order', args.order.toLowerCase());
   if (args.strict) params.set('strict', args.strict.toLowerCase() === 'true' ? 'true' : 'false');
 
-  // Extra
   if (args.owner) params.set('owner', args.owner);
   if (args.placeid || args.placeId) params.set('placeId', args.placeid || args.placeId);
 
-  // Default max if not set
   if (!params.has('max')) params.set('max', '8');
 
   return params;
@@ -104,7 +97,7 @@ async function searchScripts(args) {
   }
 }
 
-function createEmbeds(scripts, query, pageInfo = {}) {
+function createEmbeds(scripts) {
   const embeds = [];
 
   for (const script of scripts.slice(0, 8)) {
@@ -141,7 +134,6 @@ function createEmbeds(scripts, query, pageInfo = {}) {
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}`);
 
-  // Register slash commands
   const commands = [
     new SlashCommandBuilder()
       .setName('search')
@@ -177,7 +169,6 @@ client.on('messageCreate', async (message) => {
   if (command.toLowerCase() === 'search') {
     const args = parseArgs(argsText);
 
-    // Fallback: if no key:value, treat whole thing as query
     if (!args.script && !args.q && !args.query && argsText) {
       args.script = argsText;
     }
@@ -190,14 +181,18 @@ client.on('messageCreate', async (message) => {
       return message.reply(`❌ ${result.error}`);
     }
 
-    const embeds = createEmbeds(result.data.scripts, args.script || args.q);
+    const embeds = createEmbeds(result.data.scripts);
     if (embeds.length === 0) {
       return message.reply('No scripts found.');
     }
 
+    const pageText = result.data.totalPages > 1 
+      ? ` • Page 1/${result.data.totalPages}` 
+      : '';
+
     await message.reply({
-      content: `Found **\( {result.data.scripts.length}** result(s) \){result.data.totalPages > 1 ? ` • Page 1/${result.data.totalPages}` : ''}`,
-      embeds: embeds.slice(0, 4) // Discord limit per message is 10, but 4 looks clean
+      content: `Found **\( {result.data.scripts.length}** result(s) \){pageText}`,
+      embeds: embeds.slice(0, 4)
     });
   }
 });
@@ -225,13 +220,17 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.editReply(`❌ ${result.error}`);
     }
 
-    const embeds = createEmbeds(result.data.scripts, args.script);
+    const embeds = createEmbeds(result.data.scripts);
     if (embeds.length === 0) {
       return interaction.editReply('No scripts found.');
     }
 
+    const pageText = result.data.totalPages > 1 
+      ? ` • Page 1/${result.data.totalPages}` 
+      : '';
+
     await interaction.editReply({
-      content: `Found **\( {result.data.scripts.length}** result(s) \){result.data.totalPages > 1 ? ` • Page 1/${result.data.totalPages}` : ''}`,
+      content: `Found **\( {result.data.scripts.length}** result(s) \){pageText}`,
       embeds: embeds.slice(0, 4)
     });
   }
