@@ -23,7 +23,6 @@ app.listen(PORT, () => console.log(`HTTP server on port ${PORT}`));
 function parseArgs(text) {
   const args = {};
   const parts = text.trim().split(/\s+/);
-
   for (const part of parts) {
     if (part.includes(':')) {
       const [key, ...rest] = part.split(':');
@@ -36,17 +35,10 @@ function parseArgs(text) {
 
 function buildQueryParams(args) {
   const params = new URLSearchParams();
-
   const query = args.script || args.q || args.query || args.name;
   if (query) params.set('q', query);
 
-  const boolMap = {
-    verified: 'verified',
-    key: 'key',
-    patched: 'patched',
-    universal: 'universal'
-  };
-
+  const boolMap = { verified: 'verified', key: 'key', patched: 'patched', universal: 'universal' };
   for (const [userKey, apiKey] of Object.entries(boolMap)) {
     if (args[userKey] !== undefined) {
       const val = args[userKey].toLowerCase();
@@ -61,14 +53,11 @@ function buildQueryParams(args) {
 
   if (args.page) params.set('page', args.page);
   if (args.max) params.set('max', Math.min(parseInt(args.max) || 10, 20));
-
   if (args.sortby || args.sort) params.set('sortBy', (args.sortby || args.sort).toLowerCase());
   if (args.order) params.set('order', args.order.toLowerCase());
   if (args.strict) params.set('strict', args.strict.toLowerCase() === 'true' ? 'true' : 'false');
-
   if (args.owner) params.set('owner', args.owner);
   if (args.placeid || args.placeId) params.set('placeId', args.placeid || args.placeId);
-
   if (!params.has('max')) params.set('max', '8');
 
   return params;
@@ -84,7 +73,22 @@ async function searchScripts(args) {
   console.log('Fetching:', url);
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://scriptblox.com/',
+        'Origin': 'https://scriptblox.com'
+      }
+    });
+
+    if (!res.ok) {
+      console.error(`API returned status ${res.status}`);
+      return { error: `ScriptBlox API error (${res.status})` };
+    }
+
     const data = await res.json();
 
     if (data.message) return { error: data.message };
@@ -92,14 +96,13 @@ async function searchScripts(args) {
 
     return { data: data.result };
   } catch (err) {
-    console.error(err);
+    console.error('Fetch error:', err);
     return { error: 'Failed to reach ScriptBlox API' };
   }
 }
 
 function createEmbeds(scripts) {
   const embeds = [];
-
   for (const script of scripts.slice(0, 8)) {
     const embed = new EmbedBuilder()
       .setColor(script.verified ? 0x57F287 : 0x5865F2)
@@ -123,16 +126,14 @@ function createEmbeds(scripts) {
     } else if (script.game?.imageUrl) {
       embed.setThumbnail(script.game.imageUrl.startsWith('http') ? script.game.imageUrl : `https://scriptblox.com${script.game.imageUrl}`);
     }
-
     embeds.push(embed);
   }
-
   return embeds;
 }
 
 // ============ Ready ============
 client.once('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}`);
+  console.log(`✅ Logged in as ${client.user.tag}`);
 
   const commands = [
     new SlashCommandBuilder()
@@ -152,13 +153,13 @@ client.once('ready', async () => {
 
   try {
     await client.application.commands.set(commands);
-    console.log('Slash commands registered');
+    console.log('✅ Slash commands registered');
   } catch (err) {
     console.error('Failed to register slash commands:', err);
   }
 });
 
-// ============ Prefix Commands ============
+// ============ Prefix ============
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.content.startsWith(PREFIX)) return;
 
@@ -168,28 +169,17 @@ client.on('messageCreate', async (message) => {
 
   if (command.toLowerCase() === 'search') {
     const args = parseArgs(argsText);
-
-    if (!args.script && !args.q && !args.query && argsText) {
-      args.script = argsText;
-    }
+    if (!args.script && !args.q && !args.query && argsText) args.script = argsText;
 
     await message.channel.sendTyping();
-
     const result = await searchScripts(args);
 
-    if (result.error) {
-      return message.reply(`❌ ${result.error}`);
-    }
+    if (result.error) return message.reply(`❌ ${result.error}`);
 
     const embeds = createEmbeds(result.data.scripts);
-    if (embeds.length === 0) {
-      return message.reply('No scripts found.');
-    }
+    if (embeds.length === 0) return message.reply('No scripts found.');
 
-    const pageText = result.data.totalPages > 1 
-      ? ` • Page 1/${result.data.totalPages}` 
-      : '';
-
+    const pageText = result.data.totalPages > 1 ? ` • Page 1/${result.data.totalPages}` : '';
     await message.reply({
       content: `Found **\( {result.data.scripts.length}** result(s) \){pageText}`,
       embeds: embeds.slice(0, 4)
@@ -197,7 +187,7 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-// ============ Slash Commands ============
+// ============ Slash ============
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -215,20 +205,12 @@ client.on('interactionCreate', async (interaction) => {
     };
 
     const result = await searchScripts(args);
-
-    if (result.error) {
-      return interaction.editReply(`❌ ${result.error}`);
-    }
+    if (result.error) return interaction.editReply(`❌ ${result.error}`);
 
     const embeds = createEmbeds(result.data.scripts);
-    if (embeds.length === 0) {
-      return interaction.editReply('No scripts found.');
-    }
+    if (embeds.length === 0) return interaction.editReply('No scripts found.');
 
-    const pageText = result.data.totalPages > 1 
-      ? ` • Page 1/${result.data.totalPages}` 
-      : '';
-
+    const pageText = result.data.totalPages > 1 ? ` • Page 1/${result.data.totalPages}` : '';
     await interaction.editReply({
       content: `Found **\( {result.data.scripts.length}** result(s) \){pageText}`,
       embeds: embeds.slice(0, 4)
@@ -237,4 +219,13 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ============ Login ============
-client.login(process.env.TOKEN);
+const token = process.env.TOKEN;
+if (!token) {
+  console.error('❌ TOKEN environment variable is missing!');
+  process.exit(1);
+}
+
+client.login(token).catch(err => {
+  console.error('❌ Failed to login:', err.message);
+  process.exit(1);
+});
